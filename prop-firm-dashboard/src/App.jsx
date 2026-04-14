@@ -52,17 +52,17 @@ const ProgressBar = ({ label, percentage, colorClass = "bg-blue-500", suffix="%"
 export default function App() {
   // 1. STATE FOR INPUTS
   const [inputs, setInputs] = useState({
-    accountSize: 200000,
+    accountSize: 10000,
     challengeCost: 71,
     phase1Target: 8.0,
     phase2Target: 4.0,
     maxDrawdown: 8.0, 
     dailyLimit: 4.0,
     profitSplit: 80, // Changed to 80 for whole number percentage input
-    sprintRisk: 3.9,
-    winRate: 54.76,
-    rrRatio: 1.142,
-    nasVol: 146,
+    sprintRisk: 1.0,
+    winRate: 50.00,
+    rrRatio: 1.0,
+    nasVol: 250,
     tradeCost: -0.1,
     simsCount: 10000
   });
