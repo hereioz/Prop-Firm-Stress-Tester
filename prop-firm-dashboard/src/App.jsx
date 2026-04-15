@@ -52,17 +52,17 @@ const ProgressBar = ({ label, percentage, colorClass = "bg-blue-500", suffix="%"
 export default function App() {
   // 1. STATE FOR INPUTS
   const [inputs, setInputs] = useState({
-    accountSize: 10000,
+    accountSize: 200000,
     challengeCost: 71,
     phase1Target: 8.0,
     phase2Target: 4.0,
-    maxDrawdown: 8.0, 
+    maxDrawdown: 7.0, 
     dailyLimit: 4.0,
     profitSplit: 80, // Changed to 80 for whole number percentage input
-    sprintRisk: 1.0,
-    winRate: 50.00,
-    rrRatio: 1.0,
-    nasVol: 250,
+    sprintRisk: 3.9,
+    winRate: 54.76,
+    rrRatio: 1.142,
+    nasVol: 146,
     tradeCost: -0.1,
     simsCount: 10000
   });
@@ -412,7 +412,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-4 md:p-8 font-sans selection:bg-blue-500/30">
+    <div className="min-h-screen bg-[#0f172a] text-slate-200 p-3 sm:p-4 md:p-8 font-sans selection:bg-blue-500/30 overflow-x-hidden">
       
       {/* Background ambient glow */}
       <div className="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
@@ -420,22 +420,22 @@ export default function App() {
         <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-emerald-600/10 blur-[120px]"></div>
       </div>
 
-      <div className="max-w-[1400px] mx-auto space-y-6 relative z-10">
+      <div className="max-w-[1400px] w-full mx-auto space-y-6 relative z-10">
         
         {/* HEADER */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-800/80 backdrop-blur-md p-6 rounded-2xl border border-slate-700/50 shadow-2xl">
-          <div>
-            <h1 className="text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400 drop-shadow-sm">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-slate-800/80 backdrop-blur-md p-5 sm:p-6 rounded-2xl border border-slate-700/50 shadow-2xl">
+          <div className="w-full md:w-auto">
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-cyan-400 to-emerald-400 drop-shadow-sm">
               Prop Firm Stress Tester
             </h1>
-            <p className="text-slate-400 mt-1 flex items-center gap-2 font-medium">
-              <Activity size={16} className="text-blue-500"/> Advanced Prop Firm Monte Carlo Engine
+            <p className="text-sm sm:text-base text-slate-400 mt-1 flex items-center gap-2 font-medium">
+              <Activity size={16} className="text-blue-500 flex-shrink-0"/> Advanced Prop Firm Monte Carlo Engine
             </p>
           </div>
           <button 
             onClick={runSimulation}
             disabled={isCalculating}
-            className={`mt-4 md:mt-0 flex items-center gap-2 px-8 py-3.5 rounded-xl font-bold transition-all shadow-xl
+            className={`w-full md:w-auto mt-5 md:mt-0 flex items-center justify-center gap-2 px-6 sm:px-8 py-3.5 rounded-xl font-bold transition-all shadow-xl
               ${isCalculating ? 'bg-slate-700 text-slate-500 cursor-not-allowed' : 'bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-500 hover:to-blue-400 text-white hover:shadow-blue-500/25 border border-blue-500/50 hover:scale-[1.02]'}`}
           >
             <RefreshCw size={18} className={isCalculating ? 'animate-spin' : ''} />
@@ -446,7 +446,7 @@ export default function App() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           
           {/* LEFT COLUMN - INPUTS */}
-          <div className="lg:col-span-3 space-y-6 sticky top-6">
+          <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-6">
             <Card title="Strategy Metrics" icon={Crosshair}>
               <div className="space-y-4">
                 <div>
@@ -669,9 +669,9 @@ export default function App() {
                         <span className="text-slate-400 text-sm font-medium">Expected Gross Rev</span>
                         <span className="text-emerald-400 font-black text-lg">${results.financials.grossRev10.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
                      </div>
-                     <div className="mt-4 pt-6 border-t border-slate-700 flex justify-between items-center">
-                        <span className="text-slate-300 font-black tracking-wide uppercase">Net Profit (Expected)</span>
-                        <span className={`text-4xl font-black drop-shadow-md ${results.financials.netProfit10 >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                     <div className="mt-4 pt-6 border-t border-slate-700 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 sm:gap-0">
+                        <span className="text-slate-300 font-black tracking-wide uppercase text-sm sm:text-base">Net Profit (Expected)</span>
+                        <span className={`text-3xl sm:text-4xl font-black drop-shadow-md ${results.financials.netProfit10 >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                           {results.financials.netProfit10 >= 0 ? '+' : '-'}${Math.abs(results.financials.netProfit10).toLocaleString(undefined, {maximumFractionDigits:0})}
                         </span>
                      </div>
@@ -681,23 +681,23 @@ export default function App() {
 
               <Card title="Performance Streaks & Risk" icon={ShieldAlert}>
                 {results ? (
-                  <div className="grid grid-cols-2 gap-4 h-full w-full">
-                    <div className="bg-slate-900/40 p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
-                      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-2">Max Blown Streak</span>
-                      <span className="text-4xl font-black text-red-400 drop-shadow">{results.base.worst_streak}</span>
+                  <div className="grid grid-cols-2 gap-3 sm:gap-4 h-full w-full">
+                    <div className="bg-slate-900/40 p-4 sm:p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
+                      <span className="text-slate-400 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-2">Max Blown Streak</span>
+                      <span className="text-3xl sm:text-4xl font-black text-red-400 drop-shadow">{results.base.worst_streak}</span>
                     </div>
-                    <div className="bg-slate-900/40 p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
-                      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-2">Max Pass Streak</span>
-                      <span className="text-4xl font-black text-emerald-400 drop-shadow">{results.base.best_streak}</span>
+                    <div className="bg-slate-900/40 p-4 sm:p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
+                      <span className="text-slate-400 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-2">Max Pass Streak</span>
+                      <span className="text-3xl sm:text-4xl font-black text-emerald-400 drop-shadow">{results.base.best_streak}</span>
                     </div>
-                    <div className="bg-slate-900/40 p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
-                      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-2">Avg Trades to Pass</span>
-                      <span className="text-4xl font-black text-blue-400 drop-shadow">{results.base.avg_trades.toFixed(0)}</span>
+                    <div className="bg-slate-900/40 p-4 sm:p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center hover:bg-slate-800/80 transition-colors">
+                      <span className="text-slate-400 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-2">Avg Trades to Pass</span>
+                      <span className="text-3xl sm:text-4xl font-black text-blue-400 drop-shadow">{results.base.avg_trades.toFixed(0)}</span>
                     </div>
-                    <div className="bg-slate-900/40 p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center relative overflow-hidden group">
+                    <div className="bg-slate-900/40 p-4 sm:p-5 rounded-xl border border-slate-700/50 shadow-inner flex flex-col items-center justify-center text-center relative overflow-hidden group">
                       <div className="absolute inset-0 bg-red-500/5 group-hover:bg-red-500/10 transition-colors pointer-events-none"></div>
-                      <span className="text-slate-400 text-[11px] font-bold uppercase tracking-widest mb-2 z-10">40-Day Ruin Risk</span>
-                      <span className="text-4xl font-black text-red-400 drop-shadow z-10">{(results.stress.mcdd * 100).toFixed(1)}%</span>
+                      <span className="text-slate-400 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest mb-2 z-10">40-Day Ruin Risk</span>
+                      <span className="text-3xl sm:text-4xl font-black text-red-400 drop-shadow z-10">{(results.stress.mcdd * 100).toFixed(1)}%</span>
                     </div>
                   </div>
                 ) : <div className="animate-pulse h-64 bg-slate-800 rounded-lg w-full"></div>}
