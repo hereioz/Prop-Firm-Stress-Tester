@@ -54,6 +54,7 @@ export default function App() {
   const [inputs, setInputs] = useState({
     accountSize: 10000,
     challengeCost: 71,
+    phases: 2,
     phase1Target: 8.0,
     phase2Target: 4.0,
     maxDrawdown: 8.0, 
@@ -77,7 +78,7 @@ export default function App() {
 
     setTimeout(() => {
       const { 
-        accountSize, challengeCost, phase1Target, phase2Target, 
+        accountSize, challengeCost, phases, phase1Target, phase2Target, 
         maxDrawdown, profitSplit, sprintRisk, winRate, rrRatio, 
         nasVol, tradeCost, simsCount 
       } = inputs;
@@ -175,57 +176,72 @@ export default function App() {
           }
           p1_passes++;
 
-          // PHASE 2
-          eq = 0.0;
-          currentSimCurve.push(null);
-          currentSimCurve.push(0);
+          if (phases === 1) {
+            p2 = true;
+            p2_passes++;
+            days_to_pass_list.push(total_days);
+            trades_to_pass_list.push(total_trades);
+            
+            if(curr_fail > 0) fail_streaks.push(curr_fail);
+            curr_pass++; curr_fail = 0;
 
-          while (eq > effectiveMaxDD && eq < phase2Target && (mode !== "permutation" || total_days < local_days.length)) {
-            let trade = mode !== "permutation" ? master_days[Math.floor(Math.random() * master_days.length)] : local_days[total_days];
-            total_days++;
+            if(!sampleCurveFound && mode === "bootstrapping") {
+               bestCurve = [...currentSimCurve];
+               sampleCurveFound = true;
+            }
+          } else {
+            // PHASE 2
+            eq = 0.0;
+            currentSimCurve.push(null);
+            currentSimCurve.push(0);
 
-            if (trade !== null && Math.random() >= skipProb) {
-              if (eq - sprintRisk <= effectiveMaxDD) {
-                eq = effectiveMaxDD;
+            while (eq > effectiveMaxDD && eq < phase2Target && (mode !== "permutation" || total_days < local_days.length)) {
+              let trade = mode !== "permutation" ? master_days[Math.floor(Math.random() * master_days.length)] : local_days[total_days];
+              total_days++;
+
+              if (trade !== null && Math.random() >= skipProb) {
+                if (eq - sprintRisk <= effectiveMaxDD) {
+                  eq = effectiveMaxDD;
+                  currentSimCurve.push(eq);
+                  break;
+                }
+                eq += trade;
+                total_trades++;
                 currentSimCurve.push(eq);
-                break;
+                if (eq >= phase2Target) { p2 = true; break; }
+                if (eq <= effectiveMaxDD) break;
               }
-              eq += trade;
-              total_trades++;
-              currentSimCurve.push(eq);
-              if (eq >= phase2Target) { p2 = true; break; }
-              if (eq <= effectiveMaxDD) break;
-            }
-            if (mode === "insertion" && Math.random() < insertProb) {
-               if (eq - sprintRisk <= effectiveMaxDD) {
-                 eq = effectiveMaxDD;
+              if (mode === "insertion" && Math.random() < insertProb) {
+                 if (eq - sprintRisk <= effectiveMaxDD) {
+                   eq = effectiveMaxDD;
+                   currentSimCurve.push(eq);
+                   break;
+                 }
+                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W : NAS_L;
+                 eq += inserted;
+                 total_trades++;
                  currentSimCurve.push(eq);
-                 break;
-               }
-               let inserted = Math.random() < NAS_WR_FRAC ? NAS_W : NAS_L;
-               eq += inserted;
-               total_trades++;
-               currentSimCurve.push(eq);
-               if (eq >= phase2Target) { p2 = true; break; }
-               if (eq <= effectiveMaxDD) break;
+                 if (eq >= phase2Target) { p2 = true; break; }
+                 if (eq <= effectiveMaxDD) break;
+              }
             }
-          }
 
-          if (!p2) {
-             if(curr_pass > 0) pass_streaks.push(curr_pass);
-             curr_fail++; curr_pass = 0;
-             continue;
-          }
-          p2_passes++;
-          days_to_pass_list.push(total_days);
-          trades_to_pass_list.push(total_trades);
-          
-          if(curr_fail > 0) fail_streaks.push(curr_fail);
-          curr_pass++; curr_fail = 0;
+            if (!p2) {
+               if(curr_pass > 0) pass_streaks.push(curr_pass);
+               curr_fail++; curr_pass = 0;
+               continue;
+            }
+            p2_passes++;
+            days_to_pass_list.push(total_days);
+            trades_to_pass_list.push(total_trades);
+            
+            if(curr_fail > 0) fail_streaks.push(curr_fail);
+            curr_pass++; curr_fail = 0;
 
-          if(!sampleCurveFound && mode === "bootstrapping") {
-             bestCurve = [...currentSimCurve];
-             sampleCurveFound = true;
+            if(!sampleCurveFound && mode === "bootstrapping") {
+               bestCurve = [...currentSimCurve];
+               sampleCurveFound = true;
+            }
           }
 
           // FUNDED MILKING PHASE
@@ -358,16 +374,18 @@ export default function App() {
       <div className="w-full h-48 bg-slate-900 rounded-lg relative overflow-hidden p-2 border border-slate-700 shadow-inner flex-shrink-0">
         <svg className="w-full h-full" preserveAspectRatio="none" viewBox="0 0 100 100">
           <line x1="0" y1={100 - ((0 - minEq) / (maxEq - minEq)) * 100} x2="100" y2={100 - ((0 - minEq) / (maxEq - minEq)) * 100} stroke="#475569" strokeWidth="0.5" strokeDasharray="2,2" />
-          <line x1="0" y1={100 - ((inputs.phase1Target - minEq) / (maxEq - minEq)) * 100} x2="50" y2={100 - ((inputs.phase1Target - minEq) / (maxEq - minEq)) * 100} stroke="#22c55e" strokeWidth="0.5" strokeDasharray="1,1" />
-          <line x1="50" y1={100 - ((inputs.phase2Target - minEq) / (maxEq - minEq)) * 100} x2="100" y2={100 - ((inputs.phase2Target - minEq) / (maxEq - minEq)) * 100} stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1,1" />
+          <line x1="0" y1={100 - ((inputs.phase1Target - minEq) / (maxEq - minEq)) * 100} x2={inputs.phases === 1 ? "100" : "50"} y2={100 - ((inputs.phase1Target - minEq) / (maxEq - minEq)) * 100} stroke="#22c55e" strokeWidth="0.5" strokeDasharray="1,1" />
+          {inputs.phases === 2 && (
+            <line x1="50" y1={100 - ((inputs.phase2Target - minEq) / (maxEq - minEq)) * 100} x2="100" y2={100 - ((inputs.phase2Target - minEq) / (maxEq - minEq)) * 100} stroke="#3b82f6" strokeWidth="0.5" strokeDasharray="1,1" />
+          )}
           <line x1="0" y1={100 - ((results.effectiveMaxDD - minEq) / (maxEq - minEq)) * 100} x2="100" y2={100 - ((results.effectiveMaxDD - minEq) / (maxEq - minEq)) * 100} stroke="#ef4444" strokeWidth="0.5" strokeDasharray="1,1" />
 
-          <polyline points={getPolylinePoints(p1Curve, 50, 100, minEq, maxEq)} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinejoin="round" />
-          {p2Curve.length > 0 && (
+          <polyline points={getPolylinePoints(p1Curve, inputs.phases === 1 ? 100 : 50, 100, minEq, maxEq)} fill="none" stroke="#22c55e" strokeWidth="2" strokeLinejoin="round" />
+          {p2Curve.length > 0 && inputs.phases === 2 && (
             <polyline points={getPolylinePoints(p2Curve, 50, 100, minEq, maxEq).split(' ').map(p => {const [x,y] = p.split(','); return `${parseFloat(x)+50},${y}`}).join(' ')} fill="none" stroke="#3b82f6" strokeWidth="2" strokeLinejoin="round" />
           )}
         </svg>
-        <div className="absolute top-2 left-2 text-[10px] text-green-400 font-bold bg-slate-900/90 px-2 py-0.5 rounded border border-green-500/20">Phase 1 Target</div>
+        <div className="absolute top-2 left-2 text-[10px] text-green-400 font-bold bg-slate-900/90 px-2 py-0.5 rounded border border-green-500/20">{inputs.phases === 1 ? 'Target' : 'Phase 1 Target'}</div>
         <div className="absolute bottom-2 left-2 text-[10px] text-red-400 font-bold bg-slate-900/90 px-2 py-0.5 rounded border border-red-500/20">Max Drawdown ({results.effectiveMaxDD}%)</div>
       </div>
     );
@@ -505,22 +523,13 @@ export default function App() {
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 1 Tar (%)</label>
-                    <input type="number" step="0.1" name="phase1Target" value={inputs.phase1Target} onChange={handleInputChange} 
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
-                  </div>
                   <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 2 Tar (%)</label>
-                    <input type="number" step="0.1" name="phase2Target" value={inputs.phase2Target} onChange={handleInputChange} 
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Max DD (%)</label>
-                    <input type="number" step="0.1" name="maxDrawdown" value={inputs.maxDrawdown} onChange={handleInputChange} 
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Phases</label>
+                    <select name="phases" value={inputs.phases} onChange={handleInputChange} 
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner">
+                      <option value={1}>1-Phase</option>
+                      <option value={2}>2-Phase</option>
+                    </select>
                   </div>
                   <div>
                     <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Profit Split (%)</label>
@@ -528,6 +537,39 @@ export default function App() {
                       className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
                   </div>
                 </div>
+                <div className="grid grid-cols-2 gap-3">
+                   <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">{inputs.phases === 1 ? 'Target (%)' : 'Ph 1 Tar (%)'}</label>
+                    <input type="number" step="0.1" name="phase1Target" value={inputs.phase1Target} onChange={handleInputChange} 
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                  </div>
+                  {inputs.phases === 2 ? (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 2 Tar (%)</label>
+                      <input type="number" step="0.1" name="phase2Target" value={inputs.phase2Target} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex justify-between">
+                        <span>Max DD (%)</span>
+                        <span className="text-blue-400 text-[9px]">(Pos or Neg)</span>
+                      </label>
+                      <input type="number" step="0.1" name="maxDrawdown" value={inputs.maxDrawdown} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    </div>
+                  )}
+                </div>
+                {inputs.phases === 2 && (
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex justify-between">
+                      <span>Max Drawdown (%)</span>
+                      <span className="text-blue-400 text-[9px]">(Pos or Neg)</span>
+                    </label>
+                    <input type="number" step="0.1" name="maxDrawdown" value={inputs.maxDrawdown} onChange={handleInputChange} 
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                  </div>
+                )}
               </div>
             </Card>
           </div>
@@ -570,8 +612,10 @@ export default function App() {
                 {results ? (
                   <div className="flex flex-col h-full justify-between">
                     <div className="space-y-6 w-full">
-                      <ProgressBar label="Phase 1 Passing Rate" percentage={results.base.p1_rate * 100} colorClass="bg-gradient-to-r from-emerald-600 to-emerald-400" />
-                      <ProgressBar label="Phase 2 Passing Rate (Given P1)" percentage={results.base.p2_rate * 100} colorClass="bg-gradient-to-r from-blue-600 to-cyan-400" />
+                      <ProgressBar label={inputs.phases === 1 ? "Passing Rate" : "Phase 1 Passing Rate"} percentage={results.base.p1_rate * 100} colorClass="bg-gradient-to-r from-emerald-600 to-emerald-400" />
+                      {inputs.phases === 2 && (
+                        <ProgressBar label="Phase 2 Passing Rate (Given P1)" percentage={results.base.p2_rate * 100} colorClass="bg-gradient-to-r from-blue-600 to-cyan-400" />
+                      )}
                       <ProgressBar label="Overall Funded Rate" percentage={results.base.funded_rate * 100} colorClass="bg-gradient-to-r from-purple-600 to-purple-400" />
                     </div>
                     
