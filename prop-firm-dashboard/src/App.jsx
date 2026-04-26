@@ -60,7 +60,8 @@ export default function App() {
     maxDrawdown: 8.0, 
     dailyLimit: 4.0,
     profitSplit: 80, // Changed to 80 for whole number percentage input
-    sprintRisk: 1,
+    phase1Risk: 1.0,
+    phase2Risk: 1.0,
     winRate: 50.00,
     rrRatio: 1.0,
     nasVol: 250,
@@ -79,7 +80,7 @@ export default function App() {
     setTimeout(() => {
       const { 
         accountSize, challengeCost, phases, phase1Target, phase2Target, 
-        maxDrawdown, profitSplit, sprintRisk, winRate, rrRatio, 
+        maxDrawdown, profitSplit, phase1Risk, phase2Risk, winRate, rrRatio, 
         nasVol, tradeCost, simsCount 
       } = inputs;
 
@@ -88,18 +89,27 @@ export default function App() {
 
       const TOTAL_DAYS = 250;
       const NAS_WR_FRAC = winRate / 100.0;
-      const NAS_W = (sprintRisk * rrRatio) + tradeCost;
-      const NAS_L = -sprintRisk + tradeCost;
+      
+      const NAS_W_P1 = (phase1Risk * rrRatio) + tradeCost;
+      const NAS_L_P1 = -phase1Risk + tradeCost;
+      
+      const NAS_W_P2 = (phase2Risk * rrRatio) + tradeCost;
+      const NAS_L_P2 = -phase2Risk + tradeCost;
 
-      // Build Historical Days Array
-      let master_days = [];
       const numWins = Math.round(nasVol * NAS_WR_FRAC);
       const numLosses = Math.round(nasVol * (1 - NAS_WR_FRAC));
-      
-      for(let i=0; i<numWins; i++) master_days.push(NAS_W);
-      for(let i=0; i<numLosses; i++) master_days.push(NAS_L);
-      const blanks = Math.max(0, TOTAL_DAYS - master_days.length);
-      for(let i=0; i<blanks; i++) master_days.push(null);
+      const blanks = Math.max(0, TOTAL_DAYS - (numWins + numLosses));
+
+      const buildMasterDays = (w, l) => {
+        let days = [];
+        for(let i=0; i<numWins; i++) days.push(w);
+        for(let i=0; i<numLosses; i++) days.push(l);
+        for(let i=0; i<blanks; i++) days.push(null);
+        return days;
+      };
+
+      let master_days_p1 = buildMasterDays(NAS_W_P1, NAS_L_P1);
+      let master_days_p2 = buildMasterDays(NAS_W_P2, NAS_L_P2);
 
       const shuffle = (array) => {
         let currentIndex = array.length, randomIndex;
@@ -111,7 +121,8 @@ export default function App() {
         return array;
       };
 
-      shuffle(master_days);
+      shuffle(master_days_p1);
+      shuffle(master_days_p2);
 
       const simMode = (mode="bootstrapping", skipProb=0.0, insertProb=0.0, sims=simsCount) => {
         let p1_passes = 0, p2_passes = 0, first_payout_hits = 0;
@@ -123,19 +134,21 @@ export default function App() {
         let mcPaths = [];
 
         for(let s = 0; s < sims; s++) {
-          let local_days = mode === "permutation" ? shuffle([...master_days]) : master_days;
+          let local_days_p1 = mode === "permutation" ? shuffle([...master_days_p1]) : master_days_p1;
+          let local_days_p2 = mode === "permutation" ? shuffle([...master_days_p2]) : master_days_p2;
+          
           let eq = 0.0, total_days = 0, total_trades = 0;
           let p1 = false, p2 = false;
           let currentSimCurve = [0];
           let phase1PathOnly = [0];
 
           // PHASE 1
-          while (eq > effectiveMaxDD && eq < phase1Target && (mode !== "permutation" || total_days < local_days.length)) {
-            let trade = mode !== "permutation" ? master_days[Math.floor(Math.random() * master_days.length)] : local_days[total_days];
+          while (eq > effectiveMaxDD && eq < phase1Target && (mode !== "permutation" || total_days < local_days_p1.length)) {
+            let trade = mode !== "permutation" ? master_days_p1[Math.floor(Math.random() * master_days_p1.length)] : local_days_p1[total_days];
             total_days++;
 
             if (trade !== null && Math.random() >= skipProb) {
-              if (eq - sprintRisk <= effectiveMaxDD) {
+              if (eq - phase1Risk <= effectiveMaxDD) {
                 eq = effectiveMaxDD;
                 currentSimCurve.push(eq);
                 phase1PathOnly.push(eq);
@@ -149,13 +162,13 @@ export default function App() {
               if (eq <= effectiveMaxDD) break;
             }
             if (mode === "insertion" && Math.random() < insertProb) {
-               if (eq - sprintRisk <= effectiveMaxDD) {
+               if (eq - phase1Risk <= effectiveMaxDD) {
                  eq = effectiveMaxDD;
                  currentSimCurve.push(eq);
                  phase1PathOnly.push(eq);
                  break;
                }
-               let inserted = Math.random() < NAS_WR_FRAC ? NAS_W : NAS_L;
+               let inserted = Math.random() < NAS_WR_FRAC ? NAS_W_P1 : NAS_L_P1;
                eq += inserted;
                total_trades++;
                currentSimCurve.push(eq);
@@ -195,12 +208,12 @@ export default function App() {
             currentSimCurve.push(null);
             currentSimCurve.push(0);
 
-            while (eq > effectiveMaxDD && eq < phase2Target && (mode !== "permutation" || total_days < local_days.length)) {
-              let trade = mode !== "permutation" ? master_days[Math.floor(Math.random() * master_days.length)] : local_days[total_days];
+            while (eq > effectiveMaxDD && eq < phase2Target && (mode !== "permutation" || total_days < local_days_p2.length)) {
+              let trade = mode !== "permutation" ? master_days_p2[Math.floor(Math.random() * master_days_p2.length)] : local_days_p2[total_days];
               total_days++;
 
               if (trade !== null && Math.random() >= skipProb) {
-                if (eq - sprintRisk <= effectiveMaxDD) {
+                if (eq - phase2Risk <= effectiveMaxDD) {
                   eq = effectiveMaxDD;
                   currentSimCurve.push(eq);
                   break;
@@ -212,12 +225,12 @@ export default function App() {
                 if (eq <= effectiveMaxDD) break;
               }
               if (mode === "insertion" && Math.random() < insertProb) {
-                 if (eq - sprintRisk <= effectiveMaxDD) {
+                 if (eq - phase2Risk <= effectiveMaxDD) {
                    eq = effectiveMaxDD;
                    currentSimCurve.push(eq);
                    break;
                  }
-                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W : NAS_L;
+                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W_P2 : NAS_L_P2;
                  eq += inserted;
                  total_trades++;
                  currentSimCurve.push(eq);
@@ -248,23 +261,23 @@ export default function App() {
           eq = 0.0;
           let payouts = 0;
           while (eq > effectiveMaxDD) {
-             let trade = master_days[Math.floor(Math.random() * master_days.length)];
+             let trade = master_days_p1[Math.floor(Math.random() * master_days_p1.length)];
              if (trade !== null && Math.random() >= skipProb) {
-                if (eq - sprintRisk <= effectiveMaxDD) {
+                if (eq - phase1Risk <= effectiveMaxDD) {
                    break;
                 }
                 eq += trade;
                 if (eq <= effectiveMaxDD) break;
-                if (eq >= NAS_W) { payouts++; eq = 0.0; }
+                if (eq >= NAS_W_P1) { payouts++; eq = 0.0; }
              }
              if (mode === "insertion" && Math.random() < insertProb) {
-                 if (eq - sprintRisk <= effectiveMaxDD) {
+                 if (eq - phase1Risk <= effectiveMaxDD) {
                     break;
                  }
-                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W : NAS_L;
+                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W_P1 : NAS_L_P1;
                  eq += inserted;
                  if (eq <= effectiveMaxDD) break;
-                 if (eq >= NAS_W) { payouts++; eq = 0.0; }
+                 if (eq >= NAS_W_P1) { payouts++; eq = 0.0; }
              }
           }
           funded_payouts.push(payouts);
@@ -297,9 +310,9 @@ export default function App() {
          for(let i=0; i<simsCount; i++) {
             let eq = 0.0, max_eq = 0.0;
             for(let d=0; d<40; d++) {
-               let trade = master_days[Math.floor(Math.random() * master_days.length)];
+               let trade = master_days_p1[Math.floor(Math.random() * master_days_p1.length)];
                if(trade !== null) {
-                  if (eq - max_eq - sprintRisk <= effectiveMaxDD) {
+                  if (eq - max_eq - phase1Risk <= effectiveMaxDD) {
                      dd_hits++; break;
                   }
                   eq += trade;
@@ -319,8 +332,8 @@ export default function App() {
       const resInsert = simMode("insertion", 0.0, 0.10);
       const mcddRisk = run_mcdd();
 
-      // Financials (Converted profitSplit to percentage decimal)
-      const AVG_PAYOUT_VAL = (accountSize * (NAS_W / 100)) * (profitSplit / 100);
+      // Financials (Converted profitSplit to percentage decimal, based on P1/Funded Risk setup)
+      const AVG_PAYOUT_VAL = (accountSize * (NAS_W_P1 / 100)) * (profitSplit / 100);
       const spent10 = 10 * challengeCost;
       const fundedAccs10 = 10 * resBoot.funded_rate;
       const grossRev10 = fundedAccs10 * resBoot.avg_payouts * AVG_PAYOUT_VAL;
@@ -331,8 +344,10 @@ export default function App() {
         stress: { perm: resPerm.funded_rate, skip: resSkip.funded_rate, insert: resInsert.funded_rate, mcdd: mcddRisk },
         financials: { avgVal: AVG_PAYOUT_VAL, spent10, fundedAccs10, grossRev10, netProfit10 },
         effectiveMaxDD,
-        NAS_W,
-        NAS_L
+        NAS_W_P1,
+        NAS_L_P1,
+        NAS_W_P2,
+        NAS_L_P2
       });
 
       setIsCalculating(false);
@@ -467,11 +482,27 @@ export default function App() {
           <div className="lg:col-span-3 space-y-6 lg:sticky lg:top-6">
             <Card title="Strategy Metrics" icon={Crosshair}>
               <div className="space-y-4">
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Risk Per Trade (%)</label>
-                  <input type="number" step="0.1" name="sprintRisk" value={inputs.sprintRisk} onChange={handleInputChange} 
-                    className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
-                </div>
+                {inputs.phases === 1 ? (
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Risk Per Trade (%)</label>
+                    <input type="number" step="0.1" name="phase1Risk" value={inputs.phase1Risk} onChange={handleInputChange} 
+                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 1 Risk (%)</label>
+                      <input type="number" step="0.1" name="phase1Risk" value={inputs.phase1Risk} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    </div>
+                    <div>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 2 Risk (%)</label>
+                      <input type="number" step="0.1" name="phase2Risk" value={inputs.phase2Risk} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    </div>
+                  </div>
+                )}
+                
                 <div>
                   <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Win Rate (%)</label>
                   <input type="number" step="0.1" name="winRate" value={inputs.winRate} onChange={handleInputChange} 
@@ -494,15 +525,27 @@ export default function App() {
                 </div>
                 
                 {results && (
-                  <div className="pt-4 border-t border-slate-700/50 mt-4 bg-slate-900/30 -mx-4 -mb-4 p-4">
+                  <div className="pt-4 border-t border-slate-700/50 mt-4 bg-slate-900/30 -mx-4 -mb-4 p-4 space-y-2">
                     <div className="flex justify-between text-sm items-center">
-                      <span className="text-slate-400 font-medium">Net Win Size</span>
-                      <span className="text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded">+{results.NAS_W.toFixed(2)}%</span>
+                      <span className="text-slate-400 font-medium">{inputs.phases === 2 ? 'Ph 1 Net Win' : 'Net Win Size'}</span>
+                      <span className="text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded">+{results.NAS_W_P1.toFixed(2)}%</span>
                     </div>
-                    <div className="flex justify-between text-sm mt-2 items-center">
-                      <span className="text-slate-400 font-medium">Net Loss Size</span>
-                      <span className="text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded">{results.NAS_L.toFixed(2)}%</span>
+                    <div className="flex justify-between text-sm items-center">
+                      <span className="text-slate-400 font-medium">{inputs.phases === 2 ? 'Ph 1 Net Loss' : 'Net Loss Size'}</span>
+                      <span className="text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded">{results.NAS_L_P1.toFixed(2)}%</span>
                     </div>
+                    {inputs.phases === 2 && (
+                      <>
+                        <div className="flex justify-between text-sm items-center pt-2 border-t border-slate-700/30 mt-2">
+                          <span className="text-slate-400 font-medium">Ph 2 Net Win</span>
+                          <span className="text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded">+{results.NAS_W_P2.toFixed(2)}%</span>
+                        </div>
+                        <div className="flex justify-between text-sm items-center">
+                          <span className="text-slate-400 font-medium">Ph 2 Net Loss</span>
+                          <span className="text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded">{results.NAS_L_P2.toFixed(2)}%</span>
+                        </div>
+                      </>
+                    )}
                   </div>
                 )}
               </div>
@@ -688,7 +731,7 @@ export default function App() {
                 {results ? (
                   <div className="flex flex-col h-full justify-center w-full">
                     {renderEquityCurve()}
-                    <p className="text-[10px] text-slate-500 text-center mt-3 font-medium uppercase tracking-wider shrink-0">A randomly selected passing evaluation (Ph 1 + Ph 2)</p>
+                    <p className="text-[10px] text-slate-500 text-center mt-3 font-medium uppercase tracking-wider shrink-0">A randomly selected passing evaluation {inputs.phases === 2 ? '(Ph 1 + Ph 2)' : ''}</p>
                   </div>
                 ) : <div className="animate-pulse h-48 bg-slate-800 rounded-lg w-full"></div>}
               </Card>
