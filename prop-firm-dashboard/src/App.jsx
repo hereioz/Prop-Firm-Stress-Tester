@@ -51,7 +51,7 @@ const ProgressBar = ({ label, percentage, colorClass = "bg-blue-500", suffix="%"
 
 export default function App() {
   // 1. STATE FOR INPUTS
-  const [inputs, setInputs] = useState({
+const [inputs, setInputs] = useState({
     accountSize: 10000,
     challengeCost: 71,
     phases: 2,
@@ -62,12 +62,13 @@ export default function App() {
     profitSplit: 80, // Changed to 80 for whole number percentage input
     phase1Risk: 1.0,
     phase2Risk: 1.0,
+    fundedRisk: 1.0, 
     winRate: 50.00,
     rrRatio: 1.0,
     nasVol: 250,
     tradeCost: -0.1,
     simsCount: 10000
-  });
+  }); 
 
   const [results, setResults] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -80,7 +81,7 @@ export default function App() {
     setTimeout(() => {
       const { 
         accountSize, challengeCost, phases, phase1Target, phase2Target, 
-        maxDrawdown, profitSplit, phase1Risk, phase2Risk, winRate, rrRatio, 
+        maxDrawdown, profitSplit, phase1Risk, phase2Risk, fundedRisk, winRate, rrRatio, 
         nasVol, tradeCost, simsCount 
       } = inputs;
 
@@ -90,11 +91,15 @@ export default function App() {
       const TOTAL_DAYS = 250;
       const NAS_WR_FRAC = winRate / 100.0;
       
+      // Calculate independent net wins/losses for each phase
       const NAS_W_P1 = (phase1Risk * rrRatio) + tradeCost;
       const NAS_L_P1 = -phase1Risk + tradeCost;
       
       const NAS_W_P2 = (phase2Risk * rrRatio) + tradeCost;
       const NAS_L_P2 = -phase2Risk + tradeCost;
+
+      const NAS_W_FUNDED = (fundedRisk * rrRatio) + tradeCost;
+      const NAS_L_FUNDED = -fundedRisk + tradeCost;
 
       const numWins = Math.round(nasVol * NAS_WR_FRAC);
       const numLosses = Math.round(nasVol * (1 - NAS_WR_FRAC));
@@ -110,6 +115,7 @@ export default function App() {
 
       let master_days_p1 = buildMasterDays(NAS_W_P1, NAS_L_P1);
       let master_days_p2 = buildMasterDays(NAS_W_P2, NAS_L_P2);
+      let master_days_funded = buildMasterDays(NAS_W_FUNDED, NAS_L_FUNDED);
 
       const shuffle = (array) => {
         let currentIndex = array.length, randomIndex;
@@ -123,6 +129,7 @@ export default function App() {
 
       shuffle(master_days_p1);
       shuffle(master_days_p2);
+      shuffle(master_days_funded);
 
       const simMode = (mode="bootstrapping", skipProb=0.0, insertProb=0.0, sims=simsCount) => {
         let p1_passes = 0, p2_passes = 0, first_payout_hits = 0;
@@ -261,23 +268,23 @@ export default function App() {
           eq = 0.0;
           let payouts = 0;
           while (eq > effectiveMaxDD) {
-             let trade = master_days_p1[Math.floor(Math.random() * master_days_p1.length)];
+             let trade = master_days_funded[Math.floor(Math.random() * master_days_funded.length)];
              if (trade !== null && Math.random() >= skipProb) {
-                if (eq - phase1Risk <= effectiveMaxDD) {
+                if (eq - fundedRisk <= effectiveMaxDD) {
                    break;
                 }
                 eq += trade;
                 if (eq <= effectiveMaxDD) break;
-                if (eq >= NAS_W_P1) { payouts++; eq = 0.0; }
+                if (eq >= NAS_W_FUNDED) { payouts++; eq = 0.0; }
              }
              if (mode === "insertion" && Math.random() < insertProb) {
-                 if (eq - phase1Risk <= effectiveMaxDD) {
+                 if (eq - fundedRisk <= effectiveMaxDD) {
                     break;
                  }
-                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W_P1 : NAS_L_P1;
+                 let inserted = Math.random() < NAS_WR_FRAC ? NAS_W_FUNDED : NAS_L_FUNDED;
                  eq += inserted;
                  if (eq <= effectiveMaxDD) break;
-                 if (eq >= NAS_W_P1) { payouts++; eq = 0.0; }
+                 if (eq >= NAS_W_FUNDED) { payouts++; eq = 0.0; }
              }
           }
           funded_payouts.push(payouts);
@@ -310,9 +317,9 @@ export default function App() {
          for(let i=0; i<simsCount; i++) {
             let eq = 0.0, max_eq = 0.0;
             for(let d=0; d<40; d++) {
-               let trade = master_days_p1[Math.floor(Math.random() * master_days_p1.length)];
+               let trade = master_days_funded[Math.floor(Math.random() * master_days_funded.length)];
                if(trade !== null) {
-                  if (eq - max_eq - phase1Risk <= effectiveMaxDD) {
+                  if (eq - max_eq - fundedRisk <= effectiveMaxDD) {
                      dd_hits++; break;
                   }
                   eq += trade;
@@ -332,8 +339,8 @@ export default function App() {
       const resInsert = simMode("insertion", 0.0, 0.10);
       const mcddRisk = run_mcdd();
 
-      // Financials (Converted profitSplit to percentage decimal, based on P1/Funded Risk setup)
-      const AVG_PAYOUT_VAL = (accountSize * (NAS_W_P1 / 100)) * (profitSplit / 100);
+      // Financials (Converted profitSplit to percentage decimal, using Funded Risk expected payout)
+      const AVG_PAYOUT_VAL = (accountSize * (NAS_W_FUNDED / 100)) * (profitSplit / 100);
       const spent10 = 10 * challengeCost;
       const fundedAccs10 = 10 * resBoot.funded_rate;
       const grossRev10 = fundedAccs10 * resBoot.avg_payouts * AVG_PAYOUT_VAL;
@@ -347,7 +354,9 @@ export default function App() {
         NAS_W_P1,
         NAS_L_P1,
         NAS_W_P2,
-        NAS_L_P2
+        NAS_L_P2,
+        NAS_W_FUNDED,
+        NAS_L_FUNDED
       });
 
       setIsCalculating(false);
@@ -483,22 +492,34 @@ export default function App() {
             <Card title="Strategy Metrics" icon={Crosshair}>
               <div className="space-y-4">
                 {inputs.phases === 1 ? (
-                  <div>
-                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-1 block">Risk Per Trade (%)</label>
-                    <input type="number" step="0.1" name="phase1Risk" value={inputs.phase1Risk} onChange={handleInputChange} 
-                      className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
-                  </div>
-                ) : (
                   <div className="grid grid-cols-2 gap-3">
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 1 Risk (%)</label>
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Chal. Risk (%)</label>
                       <input type="number" step="0.1" name="phase1Risk" value={inputs.phase1Risk} onChange={handleInputChange} 
                         className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
                     </div>
                     <div>
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 2 Risk (%)</label>
-                      <input type="number" step="0.1" name="phase2Risk" value={inputs.phase2Risk} onChange={handleInputChange} 
+                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Funded Risk (%)</label>
+                      <input type="number" step="0.1" name="fundedRisk" value={inputs.fundedRisk} onChange={handleInputChange} 
                         className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-3 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner" />
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 1 Risk (%)</label>
+                      <input type="number" step="0.1" name="phase1Risk" value={inputs.phase1Risk} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Ph 2 Risk (%)</label>
+                      <input type="number" step="0.1" name="phase2Risk" value={inputs.phase2Risk} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner text-sm" />
+                    </div>
+                    <div>
+                      <label className="text-[9px] font-bold text-slate-400 uppercase tracking-wider mb-1 block">Funded Risk</label>
+                      <input type="number" step="0.1" name="fundedRisk" value={inputs.fundedRisk} onChange={handleInputChange} 
+                        className="w-full bg-slate-900/50 border border-slate-700 rounded-lg py-2 px-2 text-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 transition-all shadow-inner text-sm" />
                     </div>
                   </div>
                 )}
@@ -525,27 +546,38 @@ export default function App() {
                 </div>
                 
                 {results && (
-                  <div className="pt-4 border-t border-slate-700/50 mt-4 bg-slate-900/30 -mx-4 -mb-4 p-4 space-y-2">
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-slate-400 font-medium">{inputs.phases === 2 ? 'Ph 1 Net Win' : 'Net Win Size'}</span>
-                      <span className="text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded">+{results.NAS_W_P1.toFixed(2)}%</span>
-                    </div>
-                    <div className="flex justify-between text-sm items-center">
-                      <span className="text-slate-400 font-medium">{inputs.phases === 2 ? 'Ph 1 Net Loss' : 'Net Loss Size'}</span>
-                      <span className="text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded">{results.NAS_L_P1.toFixed(2)}%</span>
-                    </div>
-                    {inputs.phases === 2 && (
-                      <>
-                        <div className="flex justify-between text-sm items-center pt-2 border-t border-slate-700/30 mt-2">
-                          <span className="text-slate-400 font-medium">Ph 2 Net Win</span>
-                          <span className="text-emerald-400 font-black bg-emerald-500/10 px-2 py-0.5 rounded">+{results.NAS_W_P2.toFixed(2)}%</span>
+                  <div className="pt-4 border-t border-slate-700/50 mt-4 bg-slate-900/30 -mx-4 -mb-4 p-4">
+                     <div className={`grid ${inputs.phases === 2 ? 'grid-cols-2 gap-x-4 gap-y-3' : 'grid-cols-2 gap-x-4'} text-[11px]`}>
+                        <div>
+                           <p className="text-slate-500 font-bold mb-1 border-b border-slate-700/50 pb-1">{inputs.phases === 2 ? 'Phase 1' : 'Challenge'}</p>
+                           <div className="flex justify-between items-center"><span className="text-emerald-500/80">W:</span> <span className="text-emerald-400 font-black">+{results.NAS_W_P1.toFixed(2)}%</span></div>
+                           <div className="flex justify-between items-center"><span className="text-red-500/80">L:</span> <span className="text-red-400 font-black">{results.NAS_L_P1.toFixed(2)}%</span></div>
                         </div>
-                        <div className="flex justify-between text-sm items-center">
-                          <span className="text-slate-400 font-medium">Ph 2 Net Loss</span>
-                          <span className="text-red-400 font-black bg-red-500/10 px-2 py-0.5 rounded">{results.NAS_L_P2.toFixed(2)}%</span>
-                        </div>
-                      </>
-                    )}
+                        
+                        {inputs.phases === 2 ? (
+                          <div>
+                             <p className="text-slate-500 font-bold mb-1 border-b border-slate-700/50 pb-1">Phase 2</p>
+                             <div className="flex justify-between items-center"><span className="text-emerald-500/80">W:</span> <span className="text-emerald-400 font-black">+{results.NAS_W_P2.toFixed(2)}%</span></div>
+                             <div className="flex justify-between items-center"><span className="text-red-500/80">L:</span> <span className="text-red-400 font-black">{results.NAS_L_P2.toFixed(2)}%</span></div>
+                          </div>
+                        ) : (
+                          <div>
+                             <p className="text-slate-500 font-bold mb-1 border-b border-slate-700/50 pb-1">Funded</p>
+                             <div className="flex justify-between items-center"><span className="text-emerald-500/80">W:</span> <span className="text-emerald-400 font-black">+{results.NAS_W_FUNDED.toFixed(2)}%</span></div>
+                             <div className="flex justify-between items-center"><span className="text-red-500/80">L:</span> <span className="text-red-400 font-black">{results.NAS_L_FUNDED.toFixed(2)}%</span></div>
+                          </div>
+                        )}
+                        
+                        {inputs.phases === 2 && (
+                          <div className="col-span-2 pt-1">
+                             <p className="text-slate-500 font-bold mb-1 border-b border-slate-700/50 pb-1">Funded</p>
+                             <div className="grid grid-cols-2 gap-4">
+                               <div className="flex justify-between items-center"><span className="text-emerald-500/80">W:</span> <span className="text-emerald-400 font-black">+{results.NAS_W_FUNDED.toFixed(2)}%</span></div>
+                               <div className="flex justify-between items-center"><span className="text-red-500/80">L:</span> <span className="text-red-400 font-black">{results.NAS_L_FUNDED.toFixed(2)}%</span></div>
+                             </div>
+                          </div>
+                        )}
+                     </div>
                   </div>
                 )}
               </div>
