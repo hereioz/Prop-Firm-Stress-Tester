@@ -68,7 +68,7 @@ const [inputs, setInputs] = useState({
     nasVol: 250,
     tradeCost: -0.1,
     simsCount: 10000
-  }); 
+  });
 
   const [results, setResults] = useState(null);
   const [isCalculating, setIsCalculating] = useState(false);
@@ -199,7 +199,8 @@ const [inputs, setInputs] = useState({
           if (phases === 1) {
             p2 = true;
             p2_passes++;
-            days_to_pass_list.push(total_days);
+            const calc_days = nasVol > 0 ? total_trades * (250 / nasVol) : 0;
+            days_to_pass_list.push(calc_days);
             trades_to_pass_list.push(total_trades);
             
             if(curr_fail > 0) fail_streaks.push(curr_fail);
@@ -252,7 +253,8 @@ const [inputs, setInputs] = useState({
                continue;
             }
             p2_passes++;
-            days_to_pass_list.push(total_days);
+            const calc_days = nasVol > 0 ? total_trades * (250 / nasVol) : 0;
+            days_to_pass_list.push(calc_days);
             trades_to_pass_list.push(total_trades);
             
             if(curr_fail > 0) fail_streaks.push(curr_fail);
@@ -314,19 +316,23 @@ const [inputs, setInputs] = useState({
 
       const run_mcdd = () => {
          let dd_hits = 0;
+         const trades_in_40d = Math.round(nasVol * (40 / 250));
+         
+         if (trades_in_40d === 0) return 0;
+
          for(let i=0; i<simsCount; i++) {
             let eq = 0.0, max_eq = 0.0;
-            for(let d=0; d<40; d++) {
-               let trade = master_days_funded[Math.floor(Math.random() * master_days_funded.length)];
-               if(trade !== null) {
-                  if (eq - max_eq - fundedRisk <= effectiveMaxDD) {
-                     dd_hits++; break;
-                  }
-                  eq += trade;
-                  if(eq > max_eq) max_eq = eq;
-                  if(eq - max_eq <= effectiveMaxDD) {
-                     dd_hits++; break;
-                  }
+            for(let t=0; t<trades_in_40d; t++) {
+               // Pick trade based strictly on probability (ignores empty days)
+               let trade = Math.random() < NAS_WR_FRAC ? NAS_W_FUNDED : NAS_L_FUNDED;
+               
+               if (eq - max_eq - fundedRisk <= effectiveMaxDD) {
+                  dd_hits++; break;
+               }
+               eq += trade;
+               if(eq > max_eq) max_eq = eq;
+               if(eq - max_eq <= effectiveMaxDD) {
+                  dd_hits++; break;
                }
             }
          }
